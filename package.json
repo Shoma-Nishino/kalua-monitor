@@ -1,0 +1,25 @@
+{
+  "name": "kalua-monitor",
+  "version": "1.0.0",
+  "description": "カルア自動監視システム - 1分おき実行",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  },
+  "keywords": [
+    "puppeteer",
+    "monitoring",
+    "discord"
+  ],
+  "author": "Nishino",
+  "license": "MIT"
+}
