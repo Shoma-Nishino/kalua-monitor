@@ -92,6 +92,10 @@ async function sendDiscordNotification(bodyText) {
     return;
   }
 
+  // LINEで共有するメッセージを作成
+  const lineMessage = `🎉 カルアが検出されました！\n${TARGET_URL}`;
+  const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineMessage)}`;
+
   const message = {
     content: `🎉 キーワード「${KEYWORD}」を検出しました！`,
     embeds: [{
@@ -107,6 +111,11 @@ async function sendDiscordNotification(bodyText) {
         {
           name: 'URL',
           value: TARGET_URL,
+          inline: false
+        },
+        {
+          name: '📱 LINEで共有',
+          value: `[ここをタップしてLINEで共有](${lineShareUrl})`,
           inline: false
         },
         {
