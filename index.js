@@ -9,10 +9,56 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 // 前回の状態を保存（キーワードが見つかった状態を記録）
 let lastFoundKeyword = false;
 
+// 最後に通知を送信した時刻（12時間の休止期間用）
+let lastNotificationTime = null;
+
+// 日本時間を取得する関数
+function getJapanTime() {
+  const now = new Date();
+  // UTCから日本時間(+9時間)に変換
+  const japanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+  return japanTime;
+}
+
+// 監視時間帯かどうかをチェック（14時～18時）
+function isMonitoringTime() {
+  const japanTime = getJapanTime();
+  const hour = japanTime.getHours();
+  return hour >= 14 && hour < 18;
+}
+
+// 通知クールダウン中かチェック（最後の通知から12時間以内か）
+function isInCooldown() {
+  if (!lastNotificationTime) {
+    return false; // まだ一度も通知していない
+  }
+  const now = Date.now();
+  const twelveHoursInMs = 12 * 60 * 60 * 1000; // 12時間 = ミリ秒
+  return (now - lastNotificationTime) < twelveHoursInMs;
+}
+
 // Webサイトを監視する関数
 async function checkWebsite() {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] 監視開始...`);
+  const japanTime = getJapanTime();
+  console.log(`[${new Date().toISOString()}] 監視チェック開始... (日本時間: ${japanTime.toLocaleString('ja-JP')})`);
+
+  // 監視時間帯チェック（14時～18時）
+  if (!isMonitoringTime()) {
+    const hour = japanTime.getHours();
+    console.log(`[${new Date().toISOString()}] ⏸️  監視時間外です（現在: ${hour}時）監視スキップ`);
+    return;
+  }
+
+  // 通知クールダウンチェック（12時間）
+  if (isInCooldown()) {
+    const timeSinceLastNotification = Math.floor((Date.now() - lastNotificationTime) / 1000 / 60);
+    const remainingMinutes = 720 - timeSinceLastNotification; // 720分 = 12時間
+    console.log(`[${new Date().toISOString()}] 😴 通知クールダウン中（残り約${remainingMinutes}分）監視スキップ`);
+    return;
+  }
+
+  console.log(`[${new Date().toISOString()}] ✅ 監視時間内 & クールダウン終了 → 監視開始`);
 
   let browser = null;
 
@@ -71,6 +117,9 @@ async function checkWebsite() {
     if (keywordFound && !lastFoundKeyword) {
       await sendDiscordNotification(bodyText);
       lastFoundKeyword = true;
+      // 通知を送信したので、クールダウンタイマーを開始
+      lastNotificationTime = Date.now();
+      console.log(`[${new Date().toISOString()}] 🔔 通知送信完了 → 12時間の休止期間開始`);
     } else if (!keywordFound) {
       lastFoundKeyword = false;
     }
@@ -153,7 +202,9 @@ console.log('🚀 カルア監視システム起動');
 console.log('=================================================');
 console.log(`監視対象: ${TARGET_URL}`);
 console.log(`検索キーワード: ${KEYWORD}`);
-console.log(`実行間隔: 1分おき`);
+console.log(`チェック間隔: 1分おき`);
+console.log(`監視時間帯: 毎日14:00～18:00（日本時間）`);
+console.log(`通知後の休止: 12時間`);
 console.log('=================================================\n');
 
 // 起動時に1回実行
