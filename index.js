@@ -13,9 +13,9 @@ let lastFoundKeyword = false;
 async function checkWebsite() {
   const startTime = Date.now();
   console.log(`[${new Date().toISOString()}] 監視開始...`);
-  
+
   let browser = null;
-  
+
   try {
     // Puppeteerブラウザを起動（メモリ最適化オプション付き）
     browser = await puppeteer.launch({
@@ -32,10 +32,10 @@ async function checkWebsite() {
     });
 
     const page = await browser.newPage();
-    
+
     // ページサイズを小さく設定してメモリ節約
     await page.setViewport({ width: 1280, height: 720 });
-    
+
     // 不要なリソースをブロックしてネットワーク使用量削減
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -55,7 +55,7 @@ async function checkWebsite() {
     });
 
     // JavaScriptレンダリングを待機（最大3秒）
-    await page.waitForTimeout(3000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // ページの全テキストを取得
     const bodyText = await page.evaluate(() => document.body.innerText);
