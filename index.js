@@ -232,8 +232,7 @@ async function checkWebsite() {
         '--hide-scrollbars',
         '--metrics-recording-only',
         '--mute-audio'
-      ],
-      executablePath: '/usr/bin/chromium-browser' || undefined
+      ]
     });
 
     const page = await browser.newPage();
