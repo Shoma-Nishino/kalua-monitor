@@ -214,8 +214,26 @@ async function checkWebsite() {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu'
-      ]
+        '--single-process', // 単一プロセスモード（メモリ削減）
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-dev-tools',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-breakpad',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection',
+        '--disable-renderer-backgrounding',
+        '--enable-features=NetworkService,NetworkServiceInProcess',
+        '--force-color-profile=srgb',
+        '--hide-scrollbars',
+        '--metrics-recording-only',
+        '--mute-audio'
+      ],
+      executablePath: '/usr/bin/chromium-browser' || undefined
     });
 
     const page = await browser.newPage();
