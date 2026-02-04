@@ -1,6 +1,5 @@
 const puppeteer = require('puppeteer');
 const cron = require('node-cron');
-require('dotenv').config();
 
 const TARGET_URL = 'https://information-b.vercel.app/';
 const KEYWORD = 'カルア';
@@ -13,43 +12,11 @@ const TRIAL_START_DATE = process.env.TRIAL_START_DATE || null;
 // 前回の状態を保存（キーワードが見つかった状態を記録）
 let lastFoundKeyword = false;
 
-// 最後に通知を送信した時刻（12時間の休止期間用）
+// 最後に通知を送信した時刻（1時間の休止期間用）
 let lastNotificationTime = null;
 
 // トライアル期限チェックを実行した日付（1日1回のみチェック）
 let lastTrialCheckDate = null;
-
-// 毎日1回トライアル期限をチェック（14:00に実行）
-async function checkAndNotifyTrialExpiry() {
-  const japanTime = getJapanTime();
-  const today = japanTime.toISOString().split('T')[0]; // YYYY-MM-DD
-
-  // 今日すでにチェック済みならスキップ
-  if (lastTrialCheckDate === today) {
-    return;
-  }
-
-  // 14時台のみ実行
-  const hour = japanTime.getHours();
-  if (hour !== 14) {
-    return;
-  }
-
-  const trialInfo = checkTrialRemaining();
-  if (!trialInfo) {
-    return; // トライアル開始日が設定されていない
-  }
-
-  const { diffDays, remainingDays } = trialInfo;
-
-  console.log(`[${new Date().toISOString()}] トライアル期限チェック: 開始から${diffDays}日経過、残り${remainingDays}日`);
-
-  // 30日、27日、23日に通知
-  if (remainingDays === 0 || remainingDays === 3 || remainingDays === 7) {
-    await sendTrialExpiryNotification(remainingDays);
-    lastTrialCheckDate = today; // 今日のチェック完了
-  }
-}
 
 // 日本時間を取得する関数
 function getJapanTime() {
@@ -66,14 +33,14 @@ function isMonitoringTime() {
   return hour >= 14 && hour < 20;
 }
 
-// 通知クールダウン中かチェック（最後の通知から12時間以内か）
+// 通知クールダウン中かチェック（最後の通知から1時間以内か）
 function isInCooldown() {
   if (!lastNotificationTime) {
     return false; // まだ一度も通知していない
   }
   const now = Date.now();
-  const twelveHoursInMs = 12 * 60 * 60 * 1000; // 12時間 = ミリ秒
-  return (now - lastNotificationTime) < twelveHoursInMs;
+  const oneHourInMs = 1 * 60 * 60 * 1000; // 1時間 = ミリ秒
+  return (now - lastNotificationTime) < oneHourInMs;
 }
 
 // トライアル期間の残り日数をチェック
@@ -175,120 +142,35 @@ async function sendTrialExpiryNotification(remainingDays) {
   }
 }
 
-// Webサイトを監視する関数
-async function checkWebsite() {
-  const startTime = Date.now();
+// 毎日1回トライアル期限をチェック（14:00に実行）
+async function checkAndNotifyTrialExpiry() {
   const japanTime = getJapanTime();
-  console.log(`[${new Date().toISOString()}] 監視チェック開始... (日本時間: ${japanTime.toLocaleString('ja-JP')})`);
-  
-  // トライアル期限チェック（毎日14時に1回）
-  await checkAndNotifyTrialExpiry();
-  
-  // 監視時間帯チェック（14時～18時）
-  if (!isMonitoringTime()) {
-    const hour = japanTime.getHours();
-    console.log(`[${new Date().toISOString()}] ⏸️  監視時間外です（現在: ${hour}時）監視スキップ`);
+  const today = japanTime.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // 今日すでにチェック済みならスキップ
+  if (lastTrialCheckDate === today) {
     return;
   }
 
-  // 通知クールダウンチェック（12時間）
-  if (isInCooldown()) {
-    const timeSinceLastNotification = Math.floor((Date.now() - lastNotificationTime) / 1000 / 60);
-    const remainingMinutes = 720 - timeSinceLastNotification; // 720分 = 12時間
-    console.log(`[${new Date().toISOString()}] 😴 通知クールダウン中（残り約${remainingMinutes}分）監視スキップ`);
+  // 14時台のみ実行
+  const hour = japanTime.getHours();
+  if (hour !== 14) {
     return;
   }
 
-  console.log(`[${new Date().toISOString()}] ✅ 監視時間内 & クールダウン終了 → 監視開始`);
-  
-  let browser = null;
-  
-  try {
-    // Puppeteerブラウザを起動（メモリ最適化オプション付き）
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', // メモリ使用量削減
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process', // 単一プロセスモード（メモリ削減）
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-dev-tools',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-breakpad',
-        '--disable-component-extensions-with-background-pages',
-        '--disable-features=TranslateUI',
-        '--disable-ipc-flooding-protection',
-        '--disable-renderer-backgrounding',
-        '--enable-features=NetworkService,NetworkServiceInProcess',
-        '--force-color-profile=srgb',
-        '--hide-scrollbars',
-        '--metrics-recording-only',
-        '--mute-audio'
-      ]
-    });
+  const trialInfo = checkTrialRemaining();
+  if (!trialInfo) {
+    return; // トライアル開始日が設定されていない
+  }
 
-    const page = await browser.newPage();
-    
-    // ページサイズを小さく設定してメモリ節約
-    await page.setViewport({ width: 1280, height: 720 });
-    
-    // 不要なリソースをブロックしてネットワーク使用量削減
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const resourceType = request.resourceType();
-      // 画像、フォント、スタイルシートをブロック（必要に応じて調整）
-      if (['image', 'stylesheet', 'font'].includes(resourceType)) {
-        request.abort();
-      } else {
-        request.continue();
-      }
-    });
+  const { diffDays, remainingDays } = trialInfo;
 
-    // ページにアクセス（タイムアウト10秒）
-    await page.goto(TARGET_URL, {
-      waitUntil: 'networkidle2',
-      timeout: 10000
-    });
+  console.log(`[${new Date().toISOString()}] トライアル期限チェック: 開始から${diffDays}日経過、残り${remainingDays}日`);
 
-    // JavaScriptレンダリングを待機（最大3秒）
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // ページの全テキストを取得
-    const bodyText = await page.evaluate(() => document.body.innerText);
-
-    // キーワードが含まれているかチェック
-    const keywordFound = bodyText.includes(KEYWORD);
-
-    const elapsedTime = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] 監視完了（${elapsedTime}ms）`);
-    console.log(`キーワード「${KEYWORD}」: ${keywordFound ? '✅ 発見' : '❌ 未検出'}`);
-
-    // キーワードが新たに見つかった場合のみ通知（連続通知を防ぐ）
-    if (keywordFound && !lastFoundKeyword) {
-      await sendDiscordNotification(bodyText);
-      lastFoundKeyword = true;
-      // 通知を送信したので、クールダウンタイマーを開始
-      lastNotificationTime = Date.now();
-      console.log(`[${new Date().toISOString()}] 🔔 通知送信完了 → 12時間の休止期間開始`);
-    } else if (!keywordFound) {
-      lastFoundKeyword = false;
-    }
-
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] エラー発生:`, error.message);
-  } finally {
-    // ブラウザを必ず閉じる（メモリリーク防止）
-    if (browser) {
-      await browser.close();
-    }
+  // 30日、27日、23日に通知
+  if (remainingDays === 0 || remainingDays === 3 || remainingDays === 7) {
+    await sendTrialExpiryNotification(remainingDays);
+    lastTrialCheckDate = today; // 今日のチェック完了
   }
 }
 
@@ -354,6 +236,134 @@ async function sendDiscordNotification(bodyText) {
   }
 }
 
+// Webサイトを監視する関数（リトライロジック追加）
+async function checkWebsite() {
+  const startTime = Date.now();
+  const japanTime = getJapanTime();
+  console.log(`[${new Date().toISOString()}] 監視チェック開始... (日本時間: ${japanTime.toLocaleString('ja-JP')})`);
+  
+  // トライアル期限チェック（毎日14時に1回）
+  await checkAndNotifyTrialExpiry();
+  
+  // 監視時間帯チェック（14時～20時）
+  if (!isMonitoringTime()) {
+    const hour = japanTime.getHours();
+    console.log(`[${new Date().toISOString()}] ⏸️  監視時間外です（現在: ${hour}時）監視スキップ`);
+    return;
+  }
+
+  // 通知クールダウンチェック（1時間）
+  if (isInCooldown()) {
+    const timeSinceLastNotification = Math.floor((Date.now() - lastNotificationTime) / 1000 / 60);
+    const remainingMinutes = 60 - timeSinceLastNotification; // 60分 = 1時間
+    console.log(`[${new Date().toISOString()}] 😴 通知クールダウン中（残り約${remainingMinutes}分）監視スキップ`);
+    return;
+  }
+
+  console.log(`[${new Date().toISOString()}] ✅ 監視時間内 & クールダウン終了 → 監視開始`);
+  
+  let browser = null;
+  let retries = 3; // 最大3回リトライ
+  let success = false;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 1) {
+        const waitTime = attempt * 2000; // 2秒、4秒と増加
+        console.log(`[${new Date().toISOString()}] ⏳ ${waitTime/1000}秒待機後に再試行（${attempt}/${retries}）...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      console.log(`[${new Date().toISOString()}] Puppeteer起動試行 (${attempt}/${retries})...`);
+
+      // Puppeteerブラウザを起動（Hobby Plan用の最適化設定）
+      browser = await puppeteer.launch({
+        headless: 'new',
+        timeout: 60000, // 60秒のタイムアウト
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-extensions'
+        ]
+      });
+
+      console.log(`[${new Date().toISOString()}] ✅ Puppeteer起動成功`);
+
+      const page = await browser.newPage();
+      
+      // ページサイズを小さく設定してメモリ節約
+      await page.setViewport({ width: 1280, height: 720 });
+      
+      // 不要なリソースをブロックしてネットワーク使用量削減
+      await page.setRequestInterception(true);
+      page.on('request', (request) => {
+        const resourceType = request.resourceType();
+        if (['image', 'stylesheet', 'font'].includes(resourceType)) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+
+      // ページにアクセス（タイムアウト30秒に延長）
+      await page.goto(TARGET_URL, {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+
+      // JavaScriptがレンダリングされるまで待機
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // ページの全テキストを取得
+      const bodyText = await page.evaluate(() => document.body.innerText);
+
+      // キーワード検索
+      const keywordFound = bodyText.includes(KEYWORD);
+      
+      const duration = Date.now() - startTime;
+      console.log(`[${new Date().toISOString()}] 監視完了 (${duration}ms)`);
+      console.log(`キーワード「${KEYWORD}」: ${keywordFound ? '✅ 発見' : '❌ 未検出'}`);
+
+      // キーワードが新たに見つかった場合のみ通知（連続通知を防ぐ）
+      if (keywordFound && !lastFoundKeyword) {
+        await sendDiscordNotification(bodyText);
+        lastFoundKeyword = true;
+        // 通知を送信したので、クールダウンタイマーを開始
+        lastNotificationTime = Date.now();
+        console.log(`[${new Date().toISOString()}] 🔔 通知送信完了 → 1時間の休止期間開始`);
+      } else if (!keywordFound) {
+        lastFoundKeyword = false;
+      }
+
+      success = true;
+      break; // 成功したらループを抜ける
+
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] ❌ エラー発生 (試行${attempt}/${retries}):`, error.message);
+      
+      if (attempt >= retries) {
+        console.error(`[${new Date().toISOString()}] 🚨 ${retries}回試行しましたが全て失敗しました`);
+      }
+    } finally {
+      // ブラウザを閉じる
+      if (browser) {
+        try {
+          await browser.close();
+          console.log(`[${new Date().toISOString()}] ブラウザクローズ完了`);
+        } catch (closeError) {
+          console.error(`[${new Date().toISOString()}] ブラウザクローズエラー:`, closeError.message);
+        }
+      }
+    }
+  }
+
+  if (!success) {
+    console.error(`[${new Date().toISOString()}] 🚨 監視処理が完全に失敗しました`);
+  }
+}
+
 // アプリケーション起動
 console.log('=================================================');
 console.log('🚀 カルア監視システム起動');
@@ -362,19 +372,13 @@ console.log(`監視対象: ${TARGET_URL}`);
 console.log(`検索キーワード: ${KEYWORD}`);
 console.log(`チェック間隔: 1分おき`);
 console.log(`監視時間帯: 毎日14:00～20:00（日本時間）`);
-console.log(`通知後の休止: 12時間`);
+console.log(`通知後の休止: 1時間`);
 console.log('=================================================\n');
 
-// 起動時に1回実行
-checkWebsite();
-
-// 1分おきに実行（cron式: */1 * * * * = 毎分）
+// 1分おきに実行
 cron.schedule('*/1 * * * *', () => {
   checkWebsite();
 });
 
-// アプリケーションを永続的に実行
-process.on('SIGTERM', () => {
-  console.log('SIGTERMを受信。プロセスを終了します。');
-  process.exit(0);
-});
+// 起動時に1回実行
+checkWebsite();
